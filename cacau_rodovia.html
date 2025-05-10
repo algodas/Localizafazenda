@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Localizar fazendas: ( Com Bioma vinculado a cacau, que possua malhas de água a menos de 3KM e com rodovias a menos de 6KM</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f2f2f2;
+    }
+    header {
+      background-color: #4CAF50;
+      color: white;
+      padding: 16px;
+      font-size: 20px;
+    }
+    .container {
+      padding: 20px;
+      max-width: 960px;
+      margin: auto;
+    }
+    iframe {
+      width: 100%;
+      height: 500px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 30px;
+    }
+    h2 {
+      color: #333;
+    }
+    input[type="file"], button {
+      display: block;
+      margin: 10px 0;
+      padding: 10px;
+      font-size: 14px;
+    }
+    ul {
+      line-height: 1.6;
+      list-style: none;
+      padding-left: 0;
+    }
+    li a {
+      text-decoration: none;
+      color: #1a73e8;
+    }
+    li a:hover {
+      text-decoration: underline;
+    }
+    .map-link {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    📍 Localizar fazendas: (Com Bioma vinculado a cacau, que possua malhas de água a menos de 3KM e com rodovias a menos de 6KM)
+  </header>
+
+  <div class="container">
+    <iframe src="https://bubbly-tractor-348100.projects.earthengine.app/view/localizafazenda" allowfullscreen></iframe>
+
+    <h2>🛣️ Amostras de Cacau próximas de Água e Rodovias</h2>
+    <input type="file" id="fileInput" accept=".csv">
+    <button onclick="processarCSV()">📥 Processar Arquivo</button>
+    <div id="output"></div>
+  </div>
+
+  <script>
+    const apiKey = "";
+
+    function geodesicDistance(lat1, lon1, lat2, lon2) {
+      const toRad = deg => deg * Math.PI / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    async function obterRodovia(lat, lon) {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${apiKey}`;
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        for (const result of data.results) {
+          for (const comp of result.address_components) {
+            if (comp.types.includes("route")) return comp.long_name;
+          }
+        }
+        return data.results[0]?.formatted_address || "Desconhecida";
+      } catch {
+        return "Desconhecida";
+      }
+    }
+
+    function parseCSV(text) {
+      const lines = text.trim().split("\n");
+      const headers = lines[0].split(",");
+      return lines.slice(1).map(line => {
+        const values = line.split(",");
+        return Object.fromEntries(headers.map((h, i) => [h.trim(), values[i]?.trim() || ""]));
+      });
+    }
+
+    async function processarCSV() {
+      const file = document.getElementById("fileInput").files[0];
+      if (!file) return alert("Selecione um arquivo CSV primeiro.");
+      const text = await file.text();
+      const dados = parseCSV(text);
+      const cacau = dados.filter(d => d.tipo_origem === 'amostra_cacau');
+      const agua = dados.filter(d => d.tipo_origem === 'ponto_agua');
+      const proximos = [];
+
+      for (const amostra of cacau) {
+        for (const ponto of agua) {
+          const dist = geodesicDistance(+amostra.latitude, +amostra.longitude, +ponto.latitude, +ponto.longitude);
+          if (dist <= 3) {
+            proximos.push(amostra);
+            break;
+          }
+        }
+      }
+
+      const coordsLinks = [];
+      let ulHTML = '<ul>';
+      for (const item of proximos) {
+        const lat = parseFloat(item.latitude).toFixed(6);
+        const lon = parseFloat(item.longitude).toFixed(6);
+        const link = `https://www.google.com/maps?q=${lat},${lon}`;
+        coordsLinks.push(`${lat},${lon}`);
+        ulHTML += `<li><a href="${link}" target="_blank">${lat}, ${lon}</a></li>`;
+      }
+      ulHTML += '</ul>';
+
+      let linkMapaTodos = '';
+      if (coordsLinks.length > 1) {
+        const destino = coordsLinks[coordsLinks.length - 1];
+        const waypoints = coordsLinks.slice(0, -1).join("|");
+        const allMap = `https://www.google.com/maps/dir/?api=1&destination=${destino}&waypoints=${waypoints}`;
+        linkMapaTodos = `<div class="map-link">📌 <a href="${allMap}" target="_blank">Ver todos os pontos no mapa</a></div>`;
+      }
+
+      document.getElementById("output").innerHTML = ulHTML + linkMapaTodos;
+    }
+  </script>
+</body>
+</html>
+
