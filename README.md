@@ -38,7 +38,7 @@ O código completo está disponível no GEE em JavaScript e pode ser customizado
 
 ## 🔗 Acesse o App de Demonstração
 
-👉 [Live Demo](http://164.152.33.142/cacau_rodovia.html)
+👉 [Live Demo](https://projetos.tiago.cafe/cacau_rodovia.html)
 
 ## 📎 Repositório Git
 
