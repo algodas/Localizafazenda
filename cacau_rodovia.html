@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -61,9 +62,21 @@
   </header>
 
   <div class="container">
+    <div style="background: #fff; border-left: 4px solid #4CAF50; padding: 10px 20px; margin-bottom: 20px;">
+      <strong>Para facilitar o entendimento, o processo foi dividido em duas fases:</strong>
+    </div>
+
+    <div style="background: #fff; border-left: 4px solid #4CAF50; padding: 10px 20px; margin-bottom: 20px;">
+      <strong>Fase 1:</strong> Identificação de regiões com alta probabilidade de cultivo de cacau a partir de dados do MapBiomas e análise de NDVI, EVI e NDWI usando imagens Sentinel-2. Foram cruzadas essas regiões com áreas com presença de água (com base no NDWI e JRC) e exportados os pontos que satisfaziam a condição de estarem a até 3 km de fontes hídricas.
+    </div>
+
     <iframe src="https://bubbly-tractor-348100.projects.earthengine.app/view/localizafazenda" allowfullscreen></iframe>
 
-    <h2>🛣️ Amostras de Cacau próximas de Água e Rodovias</h2>
+    <div style="background: #fff; border-left: 4px solid #4CAF50; padding: 10px 20px; margin-bottom: 20px;">
+      <strong>Fase 2:</strong> A partir das coordenadas exportadas (água + cacau), realiza-se aqui a verificação de quais desses pontos estão também próximos a rodovias (em até 5 km), usando um algoritmo de verificação geodésica e expansão geográfica no HTML.
+    </div>
+
+    <h2>🛣️ Regiões propícias ao cultivo de Cacau e que estejam próximas de Água e Rodovias</h2>
     <input type="file" id="fileInput" accept=".csv">
     <button onclick="processarCSV()">📥 Processar Arquivo</button>
     <div id="output"></div>
@@ -83,22 +96,6 @@
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    async function obterRodovia(lat, lon) {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${apiKey}`;
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-        for (const result of data.results) {
-          for (const comp of result.address_components) {
-            if (comp.types.includes("route")) return comp.long_name;
-          }
-        }
-        return data.results[0]?.formatted_address || "Desconhecida";
-      } catch {
-        return "Desconhecida";
-      }
-    }
-
     function parseCSV(text) {
       const lines = text.trim().split("\n");
       const headers = lines[0].split(",");
@@ -108,30 +105,55 @@
       });
     }
 
+    async function estaProximoDeRodovia(lat, lon) {
+      const delta = 0.045;
+      const offsets = [0, -delta, delta];
+      for (let dLat of offsets) {
+        for (let dLon of offsets) {
+          const newLat = lat + dLat;
+          const newLon = lon + dLon;
+          const url = `https://roads.googleapis.com/v1/nearestRoads?points=${newLat},${newLon}&key=${apiKey}`;
+          try {
+            const resp = await fetch(url);
+            const data = await resp.json();
+            if (data.snappedPoints && data.snappedPoints.length > 0) {
+              return true;
+            }
+          } catch (err) {
+            console.warn(`Erro na checagem ${newLat},${newLon}:`, err);
+          }
+        }
+      }
+      return false;
+    }
+
     async function processarCSV() {
-      const file = document.getElementById("fileInput").files[0];
+      
+    const file = document.getElementById("fileInput").files[0];
+    const outputDiv = document.getElementById("output");
+    outputDiv.innerHTML = '<p>⏳ Processando arquivo, por favor aguarde...</p>';
+    
       if (!file) return alert("Selecione um arquivo CSV primeiro.");
       const text = await file.text();
       const dados = parseCSV(text);
-      const cacau = dados.filter(d => d.tipo_origem === 'amostra_cacau');
-      const agua = dados.filter(d => d.tipo_origem === 'ponto_agua');
-      const proximos = [];
+      const pontosValidos = [];
 
-      for (const amostra of cacau) {
-        for (const ponto of agua) {
-          const dist = geodesicDistance(+amostra.latitude, +amostra.longitude, +ponto.latitude, +ponto.longitude);
-          if (dist <= 3) {
-            proximos.push(amostra);
-            break;
-          }
+      for (const ponto of dados) {
+        const lat = parseFloat(ponto.latitude);
+        const lon = parseFloat(ponto.longitude);
+        if (isNaN(lat) || isNaN(lon)) continue;
+
+        const pertoRodovia = await estaProximoDeRodovia(lat, lon);
+        if (pertoRodovia) {
+          pontosValidos.push({ ...ponto, latitude: lat, longitude: lon });
         }
       }
 
       const coordsLinks = [];
       let ulHTML = '<ul>';
-      for (const item of proximos) {
-        const lat = parseFloat(item.latitude).toFixed(6);
-        const lon = parseFloat(item.longitude).toFixed(6);
+      for (const item of pontosValidos) {
+        const lat = item.latitude.toFixed(6);
+        const lon = item.longitude.toFixed(6);
         const link = `https://www.google.com/maps?q=${lat},${lon}`;
         coordsLinks.push(`${lat},${lon}`);
         ulHTML += `<li><a href="${link}" target="_blank">${lat}, ${lon}</a></li>`;
@@ -151,4 +173,3 @@
   </script>
 </body>
 </html>
-
