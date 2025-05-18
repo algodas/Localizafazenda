@@ -1,9 +1,8 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Localizar fazendas: ( Com Bioma vinculado a cacau, que possua malhas de água a menos de 3KM e com rodovias a menos de 6KM</title>
+  <title>Localizar fazendas: ( Com Bioma vinculado a cacau, que possua malhas de água a menos de 3KM e com rodovias a menos de 6KM)</title>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -54,6 +53,13 @@
       margin-top: 20px;
       font-weight: bold;
     }
+    .descricao {
+      background-color: #fff;
+      padding: 20px;
+      margin-bottom: 30px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
   </style>
 </head>
 <body>
@@ -62,40 +68,32 @@
   </header>
 
   <div class="container">
-    <div style="background: #fff; border-left: 4px solid #4CAF50; padding: 10px 20px; margin-bottom: 20px;">
-      <strong>Para facilitar o entendimento, o processo foi dividido em duas fases:</strong>
+
+    <div class="descricao">
+      <p><strong>Para facilitar o entendimento, o processo foi dividido em duas fases:</strong></p>
     </div>
 
-    <div style="background: #fff; border-left: 4px solid #4CAF50; padding: 10px 20px; margin-bottom: 20px;">
-      <strong>Fase 1:</strong> Identificação de regiões com alta probabilidade de cultivo de cacau a partir de dados do MapBiomas e análise de NDVI, EVI e NDWI usando imagens Sentinel-2. Foram cruzadas essas regiões com áreas com presença de água (com base no NDWI e JRC) e exportados os pontos que satisfaziam a condição de estarem a até 3 km de fontes hídricas.
+    <div class="descricao">
+      <h2>🔍 Fase 1: Identificação de Áreas com Potencial para Cacau</h2>
+      <p>Você informa a <strong>latitude</strong>, <strong>longitude</strong> e o <strong>raio (em km)</strong> da região de interesse. O sistema irá identificar plantações de cacau que estejam a <strong>menos de 3 km de fontes de água</strong>, indicando áreas com potencial para cultivo sustentável.</p>
+      <p>O resultado desta fase será um <strong>arquivo CSV</strong> contendo os registros geográficos identificados. Esse arquivo servirá como <strong>entrada para a Fase 2</strong>, onde será avaliada a proximidade dessas plantações com rodovias.</p>
     </div>
 
     <iframe src="https://bubbly-tractor-348100.projects.earthengine.app/view/localizafazenda" allowfullscreen></iframe>
 
-    <div style="background: #fff; border-left: 4px solid #4CAF50; padding: 10px 20px; margin-bottom: 20px;">
-      <strong>Fase 2:</strong> A partir das coordenadas exportadas (água + cacau), realiza-se aqui a verificação de quais desses pontos estão também próximos a rodovias (em até 5 km), usando um algoritmo de verificação geodésica e expansão geográfica no HTML.
+    <div class="descricao">
+      <h2>🛣️ Fase 2: Verificação de Acessibilidade Rodoviária</h2>
+      <p>Nesta fase, você realiza o <strong>upload do CSV gerado anteriormente</strong>. O sistema irá verificar quais das áreas mapeadas estão a <strong>menos de 6 km de uma rodovia</strong>, o que facilita o escoamento da produção.</p>
+      <p>Ao final, serão gerados <strong>links para mapas referenciais</strong>, destacando as áreas com condições ideais para o cultivo de cacau <strong>e</strong> com <strong>boa acessibilidade logística</strong>.</p>
     </div>
 
-    <h2>🛣️ Amostras de Cacau próximas de Água e Rodovias</h2>
+    <h2>📥 Regiões identificadas com cultivo de Cacau e próximas de Água e Rodovias</h2>
     <input type="file" id="fileInput" accept=".csv">
-    <button onclick="processarCSV()">📥 Processar Arquivo</button>
+    <button onclick="processarCSV()">📤 Processar Arquivo</button>
     <div id="output"></div>
   </div>
 
   <script>
-    const apiKey = "";
-
-    function geodesicDistance(lat1, lon1, lat2, lon2) {
-      const toRad = deg => deg * Math.PI / 180;
-      const R = 6371;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-      const a = Math.sin(dLat / 2) ** 2 +
-                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-                Math.sin(dLon / 2) ** 2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    }
-
     function parseCSV(text) {
       const lines = text.trim().split("\n");
       const headers = lines[0].split(",");
@@ -105,55 +103,18 @@
       });
     }
 
-    async function estaProximoDeRodovia(lat, lon) {
-      const delta = 0.045;
-      const offsets = [0, -delta, delta];
-      for (let dLat of offsets) {
-        for (let dLon of offsets) {
-          const newLat = lat + dLat;
-          const newLon = lon + dLon;
-          const url = `https://roads.googleapis.com/v1/nearestRoads?points=${newLat},${newLon}&key=${apiKey}`;
-          try {
-            const resp = await fetch(url);
-            const data = await resp.json();
-            if (data.snappedPoints && data.snappedPoints.length > 0) {
-              return true;
-            }
-          } catch (err) {
-            console.warn(`Erro na checagem ${newLat},${newLon}:`, err);
-          }
-        }
-      }
-      return false;
-    }
-
     async function processarCSV() {
-      
-    const file = document.getElementById("fileInput").files[0];
-    const outputDiv = document.getElementById("output");
-    outputDiv.innerHTML = '<p>⏳ Processando arquivo, por favor aguarde...</p>';
-    
+      const file = document.getElementById("fileInput").files[0];
       if (!file) return alert("Selecione um arquivo CSV primeiro.");
       const text = await file.text();
       const dados = parseCSV(text);
-      const pontosValidos = [];
-
-      for (const ponto of dados) {
-        const lat = parseFloat(ponto.latitude);
-        const lon = parseFloat(ponto.longitude);
-        if (isNaN(lat) || isNaN(lon)) continue;
-
-        const pertoRodovia = await estaProximoDeRodovia(lat, lon);
-        if (pertoRodovia) {
-          pontosValidos.push({ ...ponto, latitude: lat, longitude: lon });
-        }
-      }
+      const cacauRodovia = dados.filter(d => d.tipo_origem === 'cacau_agua');
 
       const coordsLinks = [];
       let ulHTML = '<ul>';
-      for (const item of pontosValidos) {
-        const lat = item.latitude.toFixed(6);
-        const lon = item.longitude.toFixed(6);
+      for (const item of cacauRodovia) {
+        const lat = parseFloat(item.latitude).toFixed(6);
+        const lon = parseFloat(item.longitude).toFixed(6);
         const link = `https://www.google.com/maps?q=${lat},${lon}`;
         coordsLinks.push(`${lat},${lon}`);
         ulHTML += `<li><a href="${link}" target="_blank">${lat}, ${lon}</a></li>`;
@@ -165,7 +126,7 @@
         const destino = coordsLinks[coordsLinks.length - 1];
         const waypoints = coordsLinks.slice(0, -1).join("|");
         const allMap = `https://www.google.com/maps/dir/?api=1&destination=${destino}&waypoints=${waypoints}`;
-        linkMapaTodos = `<div class="map-link">📌 <a href="${allMap}" target="_blank">Ver todos os pontos no mapa</a></div>`;
+        linkMapaTodos = `<div class="map-link">🗺️ <a href="${allMap}" target="_blank">Ver todos os pontos no mapa</a></div>`;
       }
 
       document.getElementById("output").innerHTML = ulHTML + linkMapaTodos;
