@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Localizar fazendas: ( Com Bioma vinculado a cacau, que possua malhas de água a menos de 3KM e com rodovias a menos de 6KM)</title>
+  <title>Localizar fazendas: (Com Bioma vinculado a cacau, que possua malhas de água a menos de 3KM e com rodovias a menos de 6KM)</title>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -83,17 +83,18 @@
 
     <div class="descricao">
       <h2>🛣️ Fase 2: Verificação de Acessibilidade Rodoviária</h2>
-      <p>Nesta fase, você realiza o <strong>upload do CSV gerado anteriormente</strong>. O sistema irá verificar quais das áreas mapeadas estão a <strong>menos de 6 km de uma rodovia</strong>, o que facilita o escoamento da produção.</p>
-      <p>Ao final, serão gerados <strong>links para mapas referenciais</strong>, destacando as áreas com condições ideais para o cultivo de cacau <strong>e</strong> com <strong>boa acessibilidade logística</strong>.</p>
+      <p>Nesta fase, você realiza o <strong>upload do CSV gerado anteriormente</strong>. O sistema irá verificar quais das áreas mapeadas estão a <strong>menos de 3 km de uma rodovia</strong>.</p>
     </div>
 
-    <h2>📥 Regiões identificadas com cultivo de Cacau e próximas de Água e Rodovias</h2>
+    <h2>📥 Regiões identificadas com cultivo de Cacau e próximas de Rodovias</h2>
     <input type="file" id="fileInput" accept=".csv">
     <button onclick="processarCSV()">📤 Processar Arquivo</button>
     <div id="output"></div>
   </div>
 
   <script>
+    const apiKey = "YOUR_API_KEY"; // Substitua por sua chave da Google Cloud
+
     function parseCSV(text) {
       const lines = text.trim().split("\n");
       const headers = lines[0].split(",");
@@ -101,6 +102,33 @@
         const values = line.split(",");
         return Object.fromEntries(headers.map((h, i) => [h.trim(), values[i]?.trim() || ""]));
       });
+    }
+
+    function geodesicDistance(lat1, lon1, lat2, lon2) {
+      const toRad = deg => deg * Math.PI / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    async function verificaRodoviaProxima(lat, lon) {
+      const url = `https://roads.googleapis.com/v1/nearestRoads?points=${lat},${lon}&key=${apiKey}`;
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.snappedPoints && data.snappedPoints.length > 0) {
+          const snapped = data.snappedPoints[0].location;
+          const distancia = geodesicDistance(lat, lon, snapped.latitude, snapped.longitude);
+          return distancia <= 3;
+        }
+      } catch (e) {
+        console.warn("Erro na consulta à Roads API:", e);
+      }
+      return false;
     }
 
     async function processarCSV() {
@@ -112,13 +140,21 @@
 
       const coordsLinks = [];
       let ulHTML = '<ul>';
+
       for (const item of cacauRodovia) {
-        const lat = parseFloat(item.latitude).toFixed(6);
-        const lon = parseFloat(item.longitude).toFixed(6);
-        const link = `https://www.google.com/maps?q=${lat},${lon}`;
-        coordsLinks.push(`${lat},${lon}`);
-        ulHTML += `<li><a href="${link}" target="_blank">${lat}, ${lon}</a></li>`;
+        const lat = parseFloat(item.latitude);
+        const lon = parseFloat(item.longitude);
+        const temRodovia = await verificaRodoviaProxima(lat, lon);
+
+        if (temRodovia) {
+          const latStr = lat.toFixed(6);
+          const lonStr = lon.toFixed(6);
+          const link = `https://www.google.com/maps?q=${latStr},${lonStr}`;
+          coordsLinks.push(`${latStr},${lonStr}`);
+          ulHTML += `<li><a href="${link}" target="_blank">${latStr}, ${lonStr}</a></li>`;
+        }
       }
+
       ulHTML += '</ul>';
 
       let linkMapaTodos = '';
