@@ -123,7 +123,7 @@
         if (data.snappedPoints && data.snappedPoints.length > 0) {
           const snapped = data.snappedPoints[0].location;
           const distancia = geodesicDistance(lat, lon, snapped.latitude, snapped.longitude);
-          return distancia <= 3;
+          return distancia <= 6;
         }
       } catch (e) {
         console.warn("Erro na consulta à Roads API:", e);
